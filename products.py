@@ -6,20 +6,22 @@ import time
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.5",
-    "Referer": "https://www.amazon.com/"
+    "Referer": "https://www.amazon.in/"
 }
 
+MAX_RETRIES = 5
+
+
 def get_amazon_search_results(search_term, page=1):
-    url = f"https://www.amazon.com/s?k={search_term}&page={page}"
-    max_retries = 5
-    for attempt in range(max_retries):
+    url = f"https://www.amazon.in/s?k={search_term}&page={page}"
+    for attempt in range(MAX_RETRIES):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            print("Successfully retrieved search results")
+            print(f"Successfully retrieved search results for page {page}")
             return response.text
         else:
-            print(f"Failed to retrieve search results. Status code: {response.status_code}. Attempt {attempt + 1} of {max_retries}")
-            time.sleep(2)
+            print(f"Failed to retrieve search results. Status code: {response.status_code}. Attempt {attempt + 1} of {MAX_RETRIES}")
+            time.sleep(2 ** attempt)
     print("Max retries reached. Exiting.")
     return None
 
@@ -42,12 +44,12 @@ def save_products_to_csv(products, filename):
 
 # Get About this item  from Amazon for each product and append to dataframe
 def get_about_this_item(product):
-    url = f"https://www.amazon.com/dp/{product['Product ID']}"
+    url = f"https://www.amazon.in/dp/{product['Product ID']}"
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            about_this_item = soup.find("div", {"id": "feature-bullets"})
+            about_this_item = soup.find("div", {"id": "feature-bullets", "class": "a-section a-spacing-medium a-spacing-top-small"})
             if about_this_item:
                 about_text = " ".join(about_this_item.stripped_strings)
                 if about_text.startswith("About this item"):
@@ -64,21 +66,20 @@ def get_about_this_item(product):
 
 def main():
     search_term = input("Enter search term: ")
-    html = get_amazon_search_results(search_term)
-    if html:
-        products = []
-        for page in range(2, 6):
-            html = get_amazon_search_results(search_term, page=page)
-            if html:
-                products.extend(parse_search_results(html))
-            else:
-                break # No more pages to parse
-        products = parse_search_results(html)
-        products = [get_about_this_item(product) for product in products]
-        filename = f"{search_term}.csv"
-        save_products_to_csv(products, filename)
-        print(f"Saved {len(products)} products to {filename}.")
-        time.sleep(5)
+    start_page = int(input("Enter start page: "))
+    end_page = int(input("Enter end page: "))
+    products = []
+    for page in range(start_page, end_page):
+        html = get_amazon_search_results(search_term, page=page)
+        if html:
+            products.extend(parse_search_results(html))
+        else:
+            break  # No more pages
+    products = [get_about_this_item(product) for product in products]
+    filename = f"{search_term}-from-{start_page}-to-{end_page}.csv"
+    save_products_to_csv(products, filename)
+    print(f"Saved {len(products)} products to {filename}.")
+    time.sleep(5)
 
 if __name__ == "__main__":
     main()
